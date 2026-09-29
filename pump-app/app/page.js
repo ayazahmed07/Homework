@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase as sb } from '../lib/supabase';
+import { Customers, Ledger } from './credit';
 
 const f2 = (n) => (+n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -76,7 +77,7 @@ function Pump({ mem }) {
     setFuels(f.data || []); setNozzles(n.data || []); setDays(d.data || []);
   }, [pid]);
   useEffect(() => { load(); }, [load]);
-  const tabs = [['reg', 'Daily register'], ['hist', 'History']].concat(canSetup ? [['set', 'Setup']] : [], isOwner ? [['team', 'Team']] : []);
+  const tabs = [['reg', 'Daily register'], ['cust', 'Credit customers'], ['hist', 'History']].concat(canSetup ? [['set', 'Setup']] : [], role !== 'cashier' ? [['ledger', 'Ledger']] : [], isOwner ? [['team', 'Team']] : []);
   const p = { pid, role, fuels, nozzles, days, day, setDay, reload: load, toast, setTab };
   return (
     <div className="wrap">
@@ -84,6 +85,8 @@ function Pump({ mem }) {
       <div className="bar">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
       {tab === 'reg' && <Register {...p} />}
       {tab === 'hist' && <History {...p} />}
+      {tab === 'cust' && <Customers {...p} />}
+      {tab === 'ledger' && <Ledger {...p} />}
       {tab === 'set' && <Setup {...p} />}
       {tab === 'team' && <Team {...p} />}
       {msg && <div className="toast">{msg}</div>}
@@ -110,15 +113,23 @@ function Register({ pid, role, fuels, nozzles, days, day, setDay, reload, toast 
   const calc = (n) => { const r = rd[n.id] || {}; const lit = r.close === '' || r.close == null ? 0 : +r.close - +r.open - (+r.test || 0); return { lit, amt: lit * (+rates[n.fuel_id] || 0), test: +r.test || 0 }; };
   const tot = {}; let L = 0, A = 0, T = 0;
   act.forEach((n) => { const c = calc(n); const t = (tot[n.fuel_id] = tot[n.fuel_id] || { l: 0, a: 0, t: 0 }); t.l += c.lit; t.a += c.amt; t.t += c.test; L += c.lit; A += c.amt; T += c.test; });
-  const off = closed && role !== 'owner';
-  const save = async (c = closed) => {
-    const u = (await sb.auth.getUser()).data.user;
-    const { data, error } = await sb.from('shift_days').upsert({ pump_id: pid, day, cashier, rates, closed: c, saved_by: u.id, updated_at: new Date().toISOString() }, { onConflict: 'pump_id,day' }).select('id').single();
-    if (error) return toast(error.message);
-    const rows = act.map((n) => ({ shift_day_id: data.id, pump_id: pid, nozzle_id: n.id, opening: +rd[n.id].open || 0, closing: rd[n.id].close === '' ? null : +rd[n.id].close, test_litres: +rd[n.id].test || 0 }));
-    const e2 = (await sb.from('readings').upsert(rows, { onConflict: 'shift_day_id,nozzle_id' })).error;
-    toast(e2 ? e2.message : 'Saved'); reload();
-  };
+  const off = closed;
+       const save = async (c = closed) => {
+       const u = (await sb.auth.getUser()).data.user, was = !!ex?.closed;
+       if (was) {
+         if (c) return;
+         const e = (await sb.from('shift_days').update({ closed: false }).eq('id', ex.id)).error;
+         if (e) return toast(e.message);
+         toast('Day reopened'); reload(); return;
+       }
+       const { data, error } = await sb.from('shift_days').upsert({ pump_id: pid, day, cashier, rates, closed: false, saved_by: u.id, updated_at: new Date().toISOString() }, { onConflict: 'pump_id,day' }).select('id').single();
+       if (error) return toast(error.message);
+       const rows = act.map((n) => ({ shift_day_id: data.id, pump_id: pid, nozzle_id: n.id, opening: +rd[n.id].open || 0, closing: rd[n.id].close === '' ? null : +rd[n.id].close, test_litres: +rd[n.id].test || 0 }));
+       const e2 = (await sb.from('readings').upsert(rows, { onConflict: 'shift_day_id,nozzle_id' })).error;
+       if (e2) return toast(e2.message);
+       if (c) { const e3 = (await sb.from('shift_days').update({ closed: true }).eq('id', data.id)).error; if (e3) return toast(e3.message); }
+       toast(c ? 'Day closed' : 'Saved'); reload();
+     };
   return (
     <>
       <div className="card"><div className="bar">

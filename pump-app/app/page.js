@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase as sb } from '../lib/supabase';
 import { Customers, Ledger } from './credit';
+import { Finance } from './finance';
+import { Opening } from './opening';
 
 const f2 = (n) => (+n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => new Date().toLocaleDateString('en-CA');
@@ -77,7 +79,7 @@ function Pump({ mem }) {
     setFuels(f.data || []); setNozzles(n.data || []); setDays(d.data || []);
   }, [pid]);
   useEffect(() => { load(); }, [load]);
-  const tabs = [['reg', 'Daily register'], ['cust', 'Credit customers'], ['hist', 'History']].concat(canSetup ? [['set', 'Setup']] : [], role !== 'cashier' ? [['ledger', 'Ledger']] : [], isOwner ? [['team', 'Team']] : []);
+     const tabs = [['reg', 'Daily register'], ['cust', 'Credit customers'], ['fin', 'Finance and stock'], ['hist', 'History']].concat(canSetup ? [['set', 'Setup']] : [], role !== 'cashier' ? [['ledger', 'Ledger']] : [], (isOwner || role === 'accountant') ? [['open', 'Opening balances']] : [], isOwner ? [['team', 'Team']] : []);
   const p = { pid, role, fuels, nozzles, days, day, setDay, reload: load, toast, setTab };
   return (
     <div className="wrap">
@@ -85,10 +87,12 @@ function Pump({ mem }) {
       <div className="bar">{tabs.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
       {tab === 'reg' && <Register {...p} />}
       {tab === 'hist' && <History {...p} />}
+      {tab === 'fin' && <Finance {...p} />}
       {tab === 'cust' && <Customers {...p} />}
       {tab === 'ledger' && <Ledger {...p} />}
-      {tab === 'set' && <Setup {...p} />}
+      {tab === 'open' && <Opening {...p} />}
       {tab === 'team' && <Team {...p} />}
+      {tab === 'set' && <Setup {...p} />}
       {msg && <div className="toast">{msg}</div>}
     </div>
   );

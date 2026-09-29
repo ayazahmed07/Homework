@@ -28,7 +28,7 @@ export function Customers({ pid, role, fuels, toast }) {
   }, [pid]);
   useEffect(() => { load(); }, [load]);
   const rows = cs.map((c) => {
-    const t = tx.filter((x) => x.customer_id === c.id), sales = t.filter((x) => x.kind === 'sale');
+    const t = tx.filter((x) => x.customer_id === c.id), sales = t.filter((x) => x.kind !== 'recovery');
     const S = sales.reduce((a, x) => a + +x.amount, 0), R = t.filter((x) => x.kind === 'recovery').reduce((a, x) => a + +x.amount, 0);
     return { c, sales: S, rec: R, bal: S - R, ag: aging(sales, R) };
   });
@@ -45,7 +45,7 @@ export function Customers({ pid, role, fuels, toast }) {
   };
   const del = async (t) => { if (!confirm('Delete this entry? This cannot be undone.')) return; const { error } = await sb.from('credit_txns').delete().eq('id', t.id); error ? toast(error.message) : load(); };
   let run = 0;
-  const stmt = tx.filter((x) => x.customer_id === sel).map((x) => { run += x.kind === 'sale' ? +x.amount : -x.amount; return { ...x, run }; });
+  const stmt = tx.filter((x) => x.customer_id === sel).map((x) => { run += x.kind !== 'recovery' ? +x.amount : -x.amount; return { ...x, run }; });
   const curRow = rows.find((x) => x.c.id === sel);
   return (
     <>
@@ -84,9 +84,9 @@ export function Customers({ pid, role, fuels, toast }) {
         </div>
         <div className="card sc"><h2>Statement</h2><table><thead><tr><th>Date</th><th>Type</th><th>Details</th><th className="n">Sale</th><th className="n">Recovery</th><th className="n">Balance</th><th></th></tr></thead>
           <tbody>{stmt.length ? stmt.map((x) => (
-            <tr key={x.id}><td>{x.txn_date}</td><td>{x.kind === 'sale' ? 'Credit sale' : 'Recovery (' + x.pay_account + ')'}</td>
+            <tr key={x.id}><td>{x.txn_date}</td><td>{x.kind === 'sale' ? 'Credit sale' : x.kind === 'opening' ? 'Opening balance' : 'Recovery (' + x.pay_account + ')'}</td>
               <td>{[fuels.find((f) => f.id === x.fuel_id)?.name, x.litres && f2(x.litres) + ' L', x.vehicle, x.note].filter(Boolean).join(', ')}</td>
-              <td className="n">{x.kind === 'sale' ? f2(x.amount) : ''}</td><td className="n">{x.kind === 'recovery' ? f2(x.amount) : ''}</td><td className="n">{f2(x.run)}</td>
+              <td className="n">{x.kind !== 'recovery' ? f2(x.amount) : ''}</td><td className="n">{x.kind === 'recovery' ? f2(x.amount) : ''}</td><td className="n">{f2(x.run)}</td>
               <td>{role === 'owner' && <button onClick={() => del(x)}>Delete</button>}</td></tr>)) : <tr><td colSpan="7" className="mu">No entries yet.</td></tr>}</tbody></table></div>
       </>)}
     </>

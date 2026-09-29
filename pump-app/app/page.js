@@ -29,6 +29,7 @@ function Login() {
   const [em, setEm] = useState(''), [pw, setPw] = useState(''), [m, setM] = useState('');
   const go = async (up) => {
     setM('');
+    if (!em.trim() || pw.length < 6) { setM('Enter your email and a password of at least 6 characters.'); return; }
     const r = up ? await sb.auth.signUp({ email: em, password: pw }) : await sb.auth.signInWithPassword({ email: em, password: pw });
     if (r.error) setM(r.error.message);
     else if (up && !r.data.session) setM('Check your email to confirm your account, then sign in.');
